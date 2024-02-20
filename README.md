@@ -1,4 +1,4 @@
-# README file for transporting the CTE-HR fluxes using pre-computed STILT footpritns for the PARIS WP6 CO~2~ verification games
+# README file for transporting the CTE-HR fluxes using pre-computed STILT footprints for the PARIS WP6 CO<sub>2</sub> verification games
 ### Id: README.md, 19-02-2024 D. Kivits $
 ---
 This directory contains all the scripts neccessary to transport PARIS-specific CTE-HR fluxes through the atmosphere using pre-computed STILT influence fields. The current implementation is only limited to forward atmospheric transport, but should form the basis for future iterations of the verification games in which atmospheric inversions are executed. 
@@ -46,7 +46,9 @@ The main script that is ran in the <fp_flux_mult_submit.sh> script takes the fol
 
 ## FP-FLUX MULTIPLICATION PIPELINE CONTENTS
 The functionality of the footprint-flux multiplication pipeline given in the main script can be broken down into the following steps:
+
 **Step 1**: the main script reads in the user-defined command-line arguments; defines fluxtype-specific fluxsector names; defines the input grid of the fluxes; defines the list of stations and the path to their respective input obspacks; and runs the 'main' function described in the <functions/fluxfile_functions.py> script. 
+
 **Step 2**: the main function is ran, mainly consists of the following functions:
 - **get_3d_station_location**(), which extracts the 3D location of the station from the station metadata file
 - **find_fluxfiles**(), which finds all neccessary fluxfiles. This function is executed differently for each user-defined fluxtype, as each fluxtype has its own unique file structure, and therefore requires a different approach to read in the flux files.
@@ -55,12 +57,12 @@ The functionality of the footprint-flux multiplication pipeline given in the mai
   - **hard_load_all_fluxes**(), which opens all fluxfiles as xr_mfdataset and appends these fluxes to a dictionairy. Only the variables that are given in the variablelist_vars and 'time' are loaded into this dictionairy. The latter is used for indexing the mole fractions in the ObsPack later.
   - **lazy_load_all_fluxes**(), which opens all fluxfiles as xr_mfdataset. Only the variables that are given in the variablelist_vars are retained in the dataset.
 - **create_obs_sim_dict**(), is the most important function of the pipeline. It loops over all footprints files, checks for the presence of both observations in the ObsPack files and footprints in the footprint directory, and creates an 'intermediate' dictionary that contains the modelled timestep as a key and the observed and simulated mole fractions as values. The <create_obs_sim_dict()> contains the following subfunctions:
-  - **calculate_mean_bg**(), which calculates the background atmospheric CO~2~ concentration at the recorded particle end locations for each set of particles, and then takes the mean of these concentrations. This mean concentration is then used as the background concentration for the footprint.
+  - **calculate_mean_bg**(), which calculates the background atmospheric CO<sub>2</sub> concentration at the recorded particle end locations for each set of particles, and then takes the mean of these concentrations. This mean concentration is then used as the background concentration for the footprint.
   - **check_time_in_obspack**(), which checks whether an observation is present in the ObsPack file and skips the current iteration if it is not.
   - **get_latlon_indices**(), convert the sparse indices of the footprint to dense indices that correspond to a given horizontal grid, as defined in the <coordinate_list()> function. These indices are later used in the get_flux_contribution() function. 
   - **find_time_indices**(), converts the time indices in each footprint to the corresponding time indices in the flux files. These indices are later used in the <get_flux_contribution()> function.
   - **get_flux_contribution**(), multiplies the fluxes with the footprints in a non-ortagonal manner
-  - **create_intermediate_dict**(), which creates the intermediate dictionary that contains the modelled timestep as a key and the observed and simulated mole fractions as values. If the option 'sum-variables' fed to <fp_flux_mult_singlerun.py> was set to 'True', only the 'mixed' simulated contribution to the atmospheric CO~2~ signal is stored, otherwise all simulated sector-specific contributions are stored individually. The intermediate dictionary is later used to write the results to an ObsPack file. 
+  - **create_intermediate_dict**(), which creates the intermediate dictionary that contains the modelled timestep as a key and the observed and simulated mole fractions as values. If the option 'sum-variables' fed to <fp_flux_mult_singlerun.py> was set to 'True', only the 'mixed' simulated contribution to the atmospheric CO<sub>2</sub> signal is stored, otherwise all simulated sector-specific contributions are stored individually. The intermediate dictionary is later used to write the results to an ObsPack file. 
 - **write_dict_to_ObsPack** and **write_dict_to_ObsPack_altsites()**, which write the results of the footprint-flux multiplication to an ObsPack file. The former function is used for the main stations, the latter for the alternative stations (i.e. stations that are not included in the European ObsPack collection). The latter function acts as a starting point for the use of other non-ObsPack structured observation files that need to be included into the fp-flux-multiplcation pipeline. The ObsPacks are subsetted to the user-defined date range and resampled to an hourly time resolution to match the time resolution of the pseudo-observations.
 
 ## DYNAMIC OR STATIC FLUX LOADING
