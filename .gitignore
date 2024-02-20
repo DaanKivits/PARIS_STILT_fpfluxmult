@@ -2,5 +2,4 @@ backup_scripts/
 functions/__pycache__/
 functions/fluxfile_functions_loadpartialfluxes.py
 functions/loadpartialfluxes.py
-functions/obspack_identification_col.py
 functions/__pycache__/
