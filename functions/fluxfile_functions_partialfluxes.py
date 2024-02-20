@@ -506,10 +506,37 @@ def open_fluxfiles(fluxfile_list, sim_len=240, mp_start_date=None, mp_end_date=N
 
 
 
+def open_fluxfiles_subset(flux_ds, sim_len=240, start_time=None, variables=None):
+    """ Function to open all files in fluxstring as xr_mfdataset, and sum 
+    all the variables in variablelist. Choose between multiple fluxtypes, currently still limited to 
+    "CTEHR" and "PARIS" (03-11-2023)."""
+    fluxdict = {}
+
+    # Add time variable to variables to put the values in the dictionairy later
+    variables = variables + ['time']
+            
+    logging.info('Reading fluxes into memory!')
+    if start_time != None :
+        
+        # Make sure the fluxfiles contain information for the backward simulated hours too!
+        start_date_corrected = datetime.strptime(start_time, "%Y-%m-%d") - timedelta(hours=sim_len)
+        ds = ds.sel(time=slice(start_date_corrected, start_time))
+    
+    # Fill dictionairy with all variables in the list of variables
+    for var in variables:
+        fluxdict[var] = ds[var][:].compute().values
+
+    #return subds[variables].to_dict(data='array')
+    #return ds[variables]
+    return fluxdict
+
+
 def lazy_load_all_fluxes(fluxfile_list, sim_len=240, start_date=None, end_date=None, fluxtype=None, variablelist_vars=None):
     """ Function to lazy load all fluxes into an xarray Dataset. These fluxes will be used to update the fluxes for each timestep later.
     Choose between multiple fluxtypes, currently still limited to "CTEHR" and "PARIS" (03-11-2023)."""  
     
+    logging.info('Lazy loading fluxes into memory ...')
+
     # Add time variable to variables to put the values in the dictionairy later
     variablelist_vars = variablelist_vars + ['time']
 
@@ -561,25 +588,43 @@ def update_fluxdict(flux_ds, fluxdict, cur_fp_starttime=None, last_fp_starttime=
     timedif = cur_fp_starttime - last_fp_starttime
 
     # First check if there's a time gap or the files are consecutive
-    if timedif <= np.timedelta64(1, 'h'):
-        new_fluxds = flux_ds.sel(time=cur_fp_starttime)
-
-        for var in fluxdict.keys():
-            logging.info('Busy with ' + str(var))
-            fluxdict[var] = fluxdict[var][1:]
-            fluxdict[var] = np.append(fluxdict[var], new_fluxds[var].values, axis=0)
-
+    if cur_fp_starttime == last_fp_starttime:
         return(fluxdict)
     
-    else:
+    if timedif == np.timedelta64(1, 'h'):
+        new_fluxds = flux_ds.sel(time=cur_fp_starttime)
+        for var in fluxdict.keys():
+            fluxdict[var] = fluxdict[var][1:]
+            
+            if var != 'time':
+                fluxdict[var] = np.vstack([fluxdict[var], new_fluxds[var].values[np.newaxis,...]])
+            else:
+                fluxdict[var] = np.concatenate([fluxdict[var], new_fluxds[var].values[np.newaxis,...]])
+
+    if np.timedelta64(1, 'h') < timedif < np.timedelta64(240, 'h'): 
         skipped_times = pd.date_range(last_fp_starttime + np.timedelta64(1, 'h'), cur_fp_starttime, freq='1H')
         new_fluxds = flux_ds.sel(time=(skipped_times))
         for var in fluxdict.keys():
-            logging.info('Busy with ' + str(var))
             fluxdict[var] = fluxdict[var][len(skipped_times):]
-            fluxdict[var] = np.append(fluxdict[var], new_fluxds[var].values, axis=0)
 
-        return(fluxdict)
+            if var != 'time':
+                fluxdict[var] = np.vstack([fluxdict[var], new_fluxds[var].values])
+            else:
+                fluxdict[var] = np.concatenate([fluxdict[var], new_fluxds[var].values])
+
+    if timedif > np.timedelta64(240, 'h'):
+        timerange = pd.date_range(cur_fp_starttime - np.timedelta64(239, 'h'), cur_fp_starttime, freq='1H')
+        new_fluxds = flux_ds.sel(time=(timerange))
+        for var in fluxdict.keys():
+            fluxdict[var] = fluxdict[var][len(skipped_times):]
+
+            if var != 'time':
+                fluxdict[var] = np.vstack([fluxdict[var], new_fluxds[var].values])
+            else:
+                fluxdict[var] = np.concatenate([fluxdict[var], new_fluxds[var].values])
+
+    return(fluxdict)
+    
     
 
 def check_time_in_obspack(obspack_ds, fp_starttime):
@@ -720,7 +765,7 @@ def get_flux_contribution_np(flux_ds, time_index_list, lat_index_list, lon_index
         
         else:
             mixed = sum([(flux_ds[v][time_index_list, lat_index_list, 
-                                                    lon_index_list] * footprint_df[infl_varname][:]).sum() 
+                                                    lon_index_list] * footprint_df[infl_varname][:].values).sum() 
                                                     for v in variables])
             return mixed.item()
         
@@ -780,6 +825,8 @@ def create_obs_sim_dict(flux_ds, fp_filelist, lats, lons, RDatapath, sim_len, bg
 
     # Resample the original obspack to rounded hourly data and open it for the remainder of the for-loop
     with xr.open_dataset(obspack_orig_filepath) as ds:
+        logging.info(obspack_orig_filepath)
+        logging.info(ds)
         obspack_orig_subds = ds[obsvarname].sel(time=slice(start_date, end_date)).resample({'time':'H'}).mean(dim='time', skipna=True, keep_attrs=True).dropna(dim='time')
 
         # Import list of missing footprint files
@@ -795,7 +842,6 @@ def create_obs_sim_dict(flux_ds, fp_filelist, lats, lons, RDatapath, sim_len, bg
 
         # Extract start and end time of first footprint file
         fp_starttime = footprint_extract_starttime(file)
-        fp_endtime = footprint_extract_endtime(file, simulation_len=sim_len)
         
         # Extract amount of particles released per STILT simulation from the fp_filelist
         npars = footprint_extract_npars(file)
@@ -803,13 +849,6 @@ def create_obs_sim_dict(flux_ds, fp_filelist, lats, lons, RDatapath, sim_len, bg
         # Create timerange of simulation
         timerange_sim = pd.date_range(start=start_date, end=end_date, freq='H').to_list()
         timerange_fp = footprint_hours(fp_filelist=fp_filelist, simulation_len=sim_len, shift_forward=False)
-
-        # Load the fluxes corresponding to the first footprint file in the list into memory
-        fluxdict = load_first_flux_timestep(flux_ds=flux_ds, fp_starttime=fp_starttime, fp_endtime=fp_endtime, variablelist_vars=variables)
-       
-        logging.info(fluxdict)
-
-        last_fp_starttime = np.datetime64(fp_starttime)
 
         # Loop over all simulation times
         for simtime in timerange_sim:
@@ -843,10 +882,8 @@ def create_obs_sim_dict(flux_ds, fp_filelist, lats, lons, RDatapath, sim_len, bg
                         with xr.open_dataset(file) as footprint_df:
                             
                             # First update the old fluxdict so that it shifts an X amount in time
-                            fluxdict = update_fluxdict(flux_ds=flux_ds, fluxdict=fluxdict, cur_fp_starttime = key, last_fp_starttime = last_fp_starttime)
+                            fluxdict = open_fluxfiles_subset(flux_ds=flux_ds, sim_len=sim_len, start_time = simtime, end_time = simtime, variables=variables)
                             
-                            logging.info(fluxdict)
-
                             # Extract latitude indices from sparse footprint file and insert into xr.DataArray for later indexing
                             lat_indices, lon_indices = get_latlon_indices(footprint_df, lats, lons)
                             hours_into_file = find_footprint_flux_timeindex(flux_ds=fluxdict, footprint_df=footprint_df, 
@@ -881,12 +918,12 @@ def create_obs_sim_dict(flux_ds, fp_filelist, lats, lons, RDatapath, sim_len, bg
                     
                     # Calculate pseudo observation from bg and flux contribution            
                     summary_dict = create_intermediate_dict(dict_obj=summary_dict, cont=cont, background=bg, key=key, sum_vars=sum_vars, perturbationcode=perturbationcode)
-                    
-                    last_fp_starttime = key
                 
                 else:
                     logging.warning(f'No observation was found in the ObsPack for {simtime}, skipping this footprint!')
                     continue
+
+                last_fp_starttime = key
 
             else:
                 logging.info(f'No footprint found for {simtime}, skipping this simulation time!')
@@ -1189,9 +1226,6 @@ def main(filepath, sim_length, fluxdir, stilt_rundir, fluxvarnamelist,  stations
             fluxvarnamelist.remove(changed_var)
             
             # Open all files in fluxstring as xr_mfdataset, and add variables in variablelist
-            #flux_ds = open_fluxfiles(fluxstring, sim_len=sim_length, mp_start_date = mp_start_date, 
-            #                        mp_end_date = mp_end_date, fluxtype=fluxtype, variables = [changed_var])
-            
             flux_ds = lazy_load_all_fluxes(fluxstring, sim_len=sim_length, start_date = mp_start_date, 
                                     end_date = mp_end_date, variablelist_vars = fluxvarnamelist, 
                                     fluxtype=fluxtype)
@@ -1206,9 +1240,6 @@ def main(filepath, sim_length, fluxdir, stilt_rundir, fluxvarnamelist,  stations
             
         else:
             # Open all files in fluxstring as xr_mfdataset, and add variables in variablelist
-            #flux_ds = open_fluxfiles(fluxstring, sim_len=sim_length, mp_start_date = mp_start_date, 
-            #                        mp_end_date = mp_end_date, fluxtype=fluxtype, variables = fluxvarnamelist)
-            
             flux_ds = lazy_load_all_fluxes(fluxstring, sim_len=sim_length, start_date = mp_start_date, 
                                     end_date = mp_end_date, variablelist_vars = fluxvarnamelist, 
                                     fluxtype=fluxtype)
@@ -1244,10 +1275,6 @@ def main(filepath, sim_length, fluxdir, stilt_rundir, fluxvarnamelist,  stations
         fluxstring = find_fluxfiles(fluxdir = fluxdir, variablelist_files = fluxfilenamelist, months = mons, fluxtype=fluxtype)
         
         # Open all files in fluxstring as xr_mfdataset, and add variables in variablelist
-        #flux_ds = open_fluxfiles(fluxstring, sim_len=sim_length, start_date = start_date, 
-        #                        end_date = end_date, variables = fluxvarnamelist, 
-        #                        fluxtype=fluxtype)
-        
         flux_ds = lazy_load_all_fluxes(fluxstring, sim_len=sim_length, start_date = mp_start_date, 
                         end_date = mp_end_date, variablelist_vars = fluxvarnamelist, 
                         fluxtype=fluxtype)
@@ -1281,9 +1308,6 @@ def main(filepath, sim_length, fluxdir, stilt_rundir, fluxvarnamelist,  stations
         fluxstring = find_fluxfiles(fluxdir = fluxdir, variablelist_files = fluxfilenamelist, fluxtype=fluxtype)
         
         # Open all files in fluxstring as xr_mfdataset, and add variables in variablelist
-        #flux_ds = open_fluxfiles(fluxstring, sim_len=sim_length, mp_start_date = mp_start_date, 
-        #                            mp_end_date = mp_end_date, fluxtype=fluxtype, variables = fluxvarnamelist)
-         
         flux_ds = lazy_load_all_fluxes(fluxstring, sim_len=sim_length, start_date = mp_start_date, 
                         end_date = mp_end_date, variablelist_vars = fluxvarnamelist, 
                         fluxtype=fluxtype)

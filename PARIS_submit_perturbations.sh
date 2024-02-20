@@ -26,7 +26,7 @@ do
         sum='True'
     fi
 
-    sbatch -J $jobname /projects/0/ctdas/PARIS/STILT_CTEHR_scripts/fp_flux_mult/fp_flux_mult_MP_submit.sh $experiment $sum
+    sbatch -J $jobname /projects/0/ctdas/PARIS/STILT_CTEHR_scripts/fp_flux_mult/fp_flux_mult_submit.sh $experiment $sum
     
 done
 

@@ -2,26 +2,28 @@
 This script performs the footprint multiplication process using multiple workers.
 
 The script takes input files containing footprints and fluxes, and multiplies them together to calculate the CO2
-concentration at receptor locations. It uses multiple workers to parallelize the computation and improve performance.
+amount fraction at receptor locations. It uses multiple workers to parallelize the computation and improve performance.
 
 For this workflow, STILT (Stochastic Time-Inverted Lagrangian Transport) influence fields stored in a sparse format are expected as input,
 as well as CTE-HR flux fields or PARIS-specific flux fields (which are modified CTE-HR fluxes). 
 
 Usage:
-    python fp_flux_mult_MP_multiworkers.py --station <stationcode> --fluxdir <fluxdir> --fpdir <fpdir> --bgdir <bgdir> --outdir <outdir> 
-    --stiltdir <stiltdir> --obspack_path <obspack_path> --start_date <start_date> --end_date <end_date> --lat_ll <lat_ll> --lat_ur <lat_ur> 
+    python fp_flux_mult_MP_multiworkers.py --station <stationcode> --stationsfile <stationsfile> --fluxdir <fluxdir> --fpdir <fpdir> --bgdir <bgdir> --outdir <outdir> 
+    --stiltdir <stiltdir> --obspack_path <obspack_path> --non_obspack_path <non_obspack_path> --start_date <start_date> --end_date <end_date> --lat_ll <lat_ll> --lat_ur <lat_ur> 
     --lon_ll <lon_ll> --lon_ur <lon_ur> --lat_step <lat_step> --lon_step <lon_step> --sim_len <sim_len> --npars <npars>
     --perturbation <perturbation> --verbose --sum-variables
 
 Arguments:
 
     --station <stationcode>: Code of station to run the script for (str)
+    --stationsfile <stationsfile>: Path to the (.csv) file that contains all station metadata (str)
     --fluxdir <fluxdir>: Directory where flux files are stored (str)
     --fpdir <fpdir>: Directory where footprint files are stored (str)
     --bgdir <bgdir>: Directory where (TM3) background files are stored (str)
     --outdir <outdir>: Directory where output files are stored (str)
     --stiltdir <stiltdir>: Directory where STILT is executed (str)
     --obspack_path <obspack_path>: Path to the ObsPack collection zip file (str)
+    --non_obspack_path <non_obspack_path>: Path to any other extra observation files that are not included in the European Obspack collection zip file (str)
     --start_date <start_date>: Date from when to subset the ObsPacks (str)
     --end_date <end_date>: Date up to where to subset the ObsPacks (str)
     --lat_ll <lat_ll>: Latitude of ll corner to define the grid extent (float)
@@ -38,10 +40,10 @@ Arguments:
 Note:
     This script requires the following modules to be loaded onto the HPC or locally:
 
-        - netCDF4
-        - pandas
-        - numpy
         - xarray
+        - numpy
+        - pandas
+        - netCDF4 (for background concentration lookup functionality)
 
     The rest of the modules should be available in the standard Python 3.11.0 environment.
 
@@ -49,13 +51,7 @@ Note:
 
 # Import necessary modules
 import pandas as pd
-import numpy as np
-import netCDF4 as nc
-from datetime import datetime, timedelta
-import pandas as pd
-import xarray as xr
-#from functions.fluxfile_functions_loadfluxesonebyone import *
-from functions.fluxfile_functions_02122024 import *
+from functions.fluxfile_functions_dynamicfluxes import *
 from functions.background_functions import *
 from functions.obspack_identification_url import *
 import argparse

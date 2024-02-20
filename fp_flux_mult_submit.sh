@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --time 00:05:00                             # WALLTIME limit of 6 hours
-##SBATCH -n 39                                        # ask for 52 tasks (amount of stations in stationfile_all.csv)
-#SBATCH -n 1
+##SBATCH --time 02-00:00:00                              # WALLTIME limit
+#SBATCH --time 00:15:00                              # WALLTIME limit
+#SBATCH -n 1                                        # ask for number of tasks (amount of stations in stationfile_all.csv)
 ##SBATCH -N 1                                       # ask for 1 node
 #SBATCH --cpus-per-task=1                           # ask for 1 core per task (52 cores in total)
 #SBATCH --mem-per-cpu=3000M                         # max memory per node
@@ -17,14 +17,8 @@ export OPENBLAS_NUM_TRHEADS=1
 export OMP_NUM_THREADS=1
 
 # Import statements
-#module load 2022
-#module load Anaconda3/2022.05
-#module load netCDF/4.9.0-gompi-2022a
-#source activate cte-hr-env
-
 module load 2023
 module load Anaconda3/2023.07-2
-#module load netCDF/4.9.2-gompi-2023a
 source activate cte-hr-env
 
 # Define for which flux perturbation experiment the flux multiplication is being done

@@ -149,11 +149,14 @@ def filter_obspacks(zip_filepath = '/projects/0/ctdas/PARIS/DATA/obs/obspack_co2
                 if filter_station_domain(lat=lat, lon=lon, extent=extent) == True:
                     if filter_station_times(ds=ds, start_date=start_date, end_date=end_date) == True:
                         inletheight_list.append(float(agl))
+                        if stationcode == 'JFJ':
+                            logging.info(agl)
 
         if inletheight_list != []:
             index_max = inletheight_list.index(max(inletheight_list))
             index = files.index(subset[index_max])
             filtered_list.append(files[index])
+        
         else:
             continue
 
